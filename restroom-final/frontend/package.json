@@ -2,7 +2,6 @@
   "name": "restroom-monitor",
   "version": "3.0.0",
   "private": true,
-  "homepage": "https://USERNAME.github.io/restroom-final",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
