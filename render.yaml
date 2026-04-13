@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: restroom-final
+    env: node
+    buildCommand: cd restroom-final/frontend && yarn install && yarn build
+    startCommand: yarn start
+    plan: free
