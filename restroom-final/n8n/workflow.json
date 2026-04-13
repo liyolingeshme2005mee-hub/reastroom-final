@@ -1,0 +1,149 @@
+{
+  "name": "Restroom Monitor - IoT to Supabase",
+  "nodes": [
+    {
+      "id": "webhook_iot",
+      "name": "1. Webhook - Receive IoT Data",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "restroom",
+        "responseMode": "responseNode"
+      },
+      "notes": "IoT device POSTs everything here every 60s - sensor values AND feedback counts in one payload"
+    },
+    {
+      "id": "save_reading",
+      "name": "2. Supabase - Save to toilet_readings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [460, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://elarqfyoxbqgwbgjjzvd.supabase.co/rest/v1/toilet_readings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{$env.SUPABASE_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_KEY}}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"toilet_id\":        \"{{ $json.toilet_id }}\",\n  \"toilet_name\":      \"{{ $json.toilet_name }}\",\n  \"ammonia_ppm\":      {{ $json.ammonia_ppm }},\n  \"temperature\":      {{ $json.temperature }},\n  \"humidity\":         {{ $json.humidity }},\n  \"footfall\":         {{ $json.footfall }},\n  \"usage\":            {{ $json.usage }},\n  \"feedback_good\":    {{ $json.feedback_good }},\n  \"feedback_average\": {{ $json.feedback_average }},\n  \"feedback_bad\":     {{ $json.feedback_bad }},\n  \"updated_at\":       \"{{ new Date().toISOString() }}\"\n}"
+      }
+    },
+    {
+      "id": "check_ammonia",
+      "name": "3. Check - Ammonia Bad?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [700, 200],
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.ammonia_ppm }}", "operation": "larger", "value2": 10 }]
+        }
+      }
+    },
+    {
+      "id": "check_feedback",
+      "name": "4. Check - Feedback Bad?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [700, 420],
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.feedback_bad }}", "operation": "larger", "value2": 10 }]
+        }
+      }
+    },
+    {
+      "id": "alert_ammonia",
+      "name": "5a. Alert - High Ammonia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [940, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SLACK_OR_TELEGRAM_WEBHOOK",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={ \"text\": \"Ammonia alert: {{ $json.ammonia_ppm }}ppm at {{ $json.toilet_name }}. Cleaning required!\" }"
+      },
+      "notes": "Replace URL with your Slack / Telegram / WhatsApp webhook URL"
+    },
+    {
+      "id": "alert_feedback",
+      "name": "5b. Alert - Bad Feedback High",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [940, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SLACK_OR_TELEGRAM_WEBHOOK",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={ \"text\": \"Feedback alert: {{ $json.feedback_bad }} bad votes at {{ $json.toilet_name }}. Check cleaning!\" }"
+      }
+    },
+    {
+      "id": "respond_ok",
+      "name": "6. Respond - OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [700, 600],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true, \"saved_at\": \"{{ new Date().toISOString() }}\" }"
+      }
+    }
+  ],
+  "connections": {
+    "1. Webhook - Receive IoT Data": {
+      "main": [[
+        { "node": "2. Supabase - Save to toilet_readings", "type": "main", "index": 0 }
+      ]]
+    },
+    "2. Supabase - Save to toilet_readings": {
+      "main": [[
+        { "node": "3. Check - Ammonia Bad?",  "type": "main", "index": 0 },
+        { "node": "4. Check - Feedback Bad?", "type": "main", "index": 0 },
+        { "node": "6. Respond - OK",          "type": "main", "index": 0 }
+      ]]
+    },
+    "3. Check - Ammonia Bad?": {
+      "main": [
+        [{ "node": "5a. Alert - High Ammonia",    "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "4. Check - Feedback Bad?": {
+      "main": [
+        [{ "node": "5b. Alert - Bad Feedback High", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "_setup": {
+    "step1": "Set SUPABASE_KEY in n8n Settings > Environment Variables",
+    "step2": "Activate workflow",
+    "step3": "IoT device POSTs to https://your-n8n.com/webhook/restroom every 60s",
+    "payload_example": {
+      "toilet_id": "T-001",
+      "toilet_name": "Main Lobby Restroom",
+      "ammonia_ppm": 8,
+      "temperature": 27.4,
+      "humidity": 62,
+      "footfall": 43,
+      "usage": 21,
+      "feedback_good": 38,
+      "feedback_average": 12,
+      "feedback_bad": 5
+    }
+  }
+}
