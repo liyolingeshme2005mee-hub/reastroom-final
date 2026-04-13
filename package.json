@@ -1,0 +1,11 @@
+{
+  "name": "reastroom-final",
+  "private": true,
+  "dependencies": {
+    "serve": "^14.2.0"
+  },
+  "scripts": {
+    "build": "cd restroom-final/frontend && yarn install && yarn build",
+    "start": "serve -s restroom-final/frontend/build"
+  }
+}
